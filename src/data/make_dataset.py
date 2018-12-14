@@ -87,6 +87,12 @@ class ImageProcessor:
         return img
 
     def process(self, img, face, landmarks, output_filter: Filter):
+        if output_filter == ImageProcessor.Filter.DOG:
+            return self.__process_dog(img, face, landmarks)
+        else:
+            raise NotImplementedError("Unsupported filter {}".format(output_filter))
+
+    def __process_dog(self, img, face, landmarks):
         (x, y, w, h) = (face.left(), face.top(), face.width(), face.height())
         # inclination based on eyebrows
         incl = ImageProcessor.__calculate_inclination(landmarks[17], landmarks[26])
@@ -94,6 +100,10 @@ class ImageProcessor:
         is_mouth_open = (landmarks[66][1] - landmarks[62][1]) >= 10
         (x0, y0, w0, h0) = ImageProcessor.__get_face_boundbox(landmarks, 6)  # bound box of mouth
         (x3, y3, w3, h3) = ImageProcessor.__get_face_boundbox(landmarks, 5)  # nose
+        # expand the nose bounding box
+        x3 = x3 - int(w3/2.0)
+        w3 = int(w3*2.0)
+
         self.__apply_sprite(img, 'doggy_nose.png', w3, x3, y3, incl, ontop=False)
 
         self.__apply_sprite(img, 'doggy_ears.png', w, x, y, incl)
@@ -184,15 +194,22 @@ class ImageProcessor:
 
 
 @click.command()
-@click.argument('input_filepath', type=click.Path(exists=True))
-@click.argument('interim_filepath', type=click.Path(exists=True))
-@click.argument('output_filepath', type=click.Path())
-def main(input_filepath, interim_filepath, output_filepath):
+@click.option('--input', '-i', type=click.Path(exists=True))
+@click.option('--output', '-o', type=click.Path())
+@click.argument('operation', type=click.Choice(['apply_filter', 'create_hdf5']))
+def main(input, output, operation):
     """ Runs data processing scripts to turn raw data from (../raw) into
         cleaned data ready to be analyzed (saved in ../processed).
     """
+    if operation == 'apply_filter':
+        apply_filter(input, output)
+    else:
+        raise NotImplementedError("Unsupported operation: {}".format(operation))
+
+
+def apply_filter(input_filepath, interim_filepath):
     logger = logging.getLogger(__name__)
-    logger.info('making final data set from raw data')
+    logger.info('Applying filter to raw images')
 
     database_name = os.path.basename(input_filepath)
 
@@ -208,7 +225,7 @@ def main(input_filepath, interim_filepath, output_filepath):
 
     # grab raw images
     raw_images = [img for img in Path(input_filepath).glob('**/*.jpg')]
-    raw_images = raw_images[15:45]
+    raw_images = raw_images[:50]
 
     # extract faces
     num_accepted = 0
