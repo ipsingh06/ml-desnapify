@@ -11,6 +11,7 @@ import math
 from imutils import face_utils, rotate_bound
 import matplotlib.pyplot as plt
 from enum import Enum
+from tqdm import tqdm
 
 
 MIN_FACE_SIZE = 200
@@ -223,9 +224,11 @@ def apply_filter(input_filepath, interim_filepath):
     os.makedirs(database_orig_path)
     os.makedirs(database_transformed_path)
 
+    # file to map raw image names to filtered image names
+    map_file = open(os.path.join(database_interim_path, 'raw_to_interim_map.txt'), 'w')
+
     # grab raw images
     raw_images = [img for img in Path(input_filepath).glob('**/*.jpg')]
-    raw_images = raw_images[:50]
 
     # extract faces
     num_accepted = 0
@@ -233,25 +236,31 @@ def apply_filter(input_filepath, interim_filepath):
     image_processor = ImageProcessor(output_width=OUTPUT_IMAGE_WIDTH,
                                      output_height=OUTPUT_IMAGE_HEIGHT,
                                      sprites_path=os.path.join(str(project_dir), 'src/data/sprites'))
-    for raw_image_path in raw_images:
-        raw_image_path = str(raw_image_path)
-        # load color (BGR) image
-        img = cv2.imread(raw_image_path)
-        has_face = face_detector.has_face(img)
-        if has_face:
-            num_accepted += 1
-            filename = "{:05}.jpg".format(num_accepted)
-            orig_image = image_processor.resize(img)
 
-            # skip if scaled+cropped image does not have a detectable face
-            if not face_detector.has_face(orig_image):
-                continue
-            face, landmarks = face_detector.get_landmarks(orig_image)
-            doggy_image = image_processor.process(orig_image, face, landmarks, ImageProcessor.Filter.DOG)
+    with tqdm(raw_images) as progress_bar:
+        for raw_image_path in progress_bar:
+            raw_image_path = str(raw_image_path)
+            # load color (BGR) image
+            img = cv2.imread(raw_image_path)
+            has_face = face_detector.has_face(img)
+            if has_face:
+                num_accepted += 1
+                filename = "{:05}.jpg".format(num_accepted)
+                orig_image = image_processor.resize(img)
 
-            print("{} -> {}".format(raw_image_path, filename))
-            cv2.imwrite(os.path.join(database_orig_path, filename), orig_image)
-            cv2.imwrite(os.path.join(database_transformed_path, filename), doggy_image)
+                # skip if scaled+cropped image does not have a detectable face
+                if not face_detector.has_face(orig_image):
+                    continue
+                face, landmarks = face_detector.get_landmarks(orig_image)
+                doggy_image = image_processor.process(orig_image, face, landmarks, ImageProcessor.Filter.DOG)
+
+                map_file.write("{} -> {}\n".format(raw_image_path, filename))
+                map_file.flush()
+                cv2.imwrite(os.path.join(database_orig_path, filename), orig_image)
+                cv2.imwrite(os.path.join(database_transformed_path, filename), doggy_image)
+                progress_bar.set_description("Wrote image file {}".format(filename))
+
+    map_file.close()
 
 
 if __name__ == '__main__':
