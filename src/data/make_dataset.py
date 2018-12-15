@@ -352,8 +352,11 @@ def apply_filter(input_filepath, interim_filepath):
         for raw_image_path in progress_bar:
             raw_image_path = str(raw_image_path)
             # load color (BGR) image
-            img = cv2.imread(raw_image_path)
-            has_face = face_detector.has_face(img)
+            try:
+                img = cv2.imread(raw_image_path)
+                has_face = face_detector.has_face(img)
+            except cv2.error:
+                continue
             if has_face:
                 orig_image = image_processor.resize(img)
 
