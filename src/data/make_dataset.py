@@ -16,6 +16,7 @@ import numpy as np
 import h5py
 import parmap
 from collections import OrderedDict
+import random
 
 
 MIN_FACE_SIZE = 200
@@ -256,6 +257,11 @@ def create_hdf5(input_filepath, output_filepath):
             raise IOError('Orig images do not match transformed images')
 
     image_names = [os.path.basename(str(img)) for img in orig_images]
+
+    # shuffle
+    random.seed(0)
+    random.shuffle(image_names)
+
     n = len(image_names)
     datasets = OrderedDict([
         ("train", image_names[:int(DB_SPLIT_TRAIN*n)]),
