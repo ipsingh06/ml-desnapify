@@ -12,12 +12,19 @@ from imutils import face_utils, rotate_bound
 import matplotlib.pyplot as plt
 from enum import Enum
 from tqdm import tqdm
+import numpy as np
+import h5py
+import parmap
+from collections import OrderedDict
 
 
 MIN_FACE_SIZE = 200
 
 OUTPUT_IMAGE_WIDTH = 500
 OUTPUT_IMAGE_HEIGHT = 500
+
+DB_SPLIT_TRAIN = 0.6
+DB_SPLIT_VALIDATION = 0.2
 
 INTERIM_ORIG_DIR = "orig"
 INTERIM_TRANSFORMED_DIR = "transformed"
@@ -88,6 +95,7 @@ class ImageProcessor:
         return img
 
     def process(self, img, face, landmarks, output_filter: Filter):
+        img = img.copy()
         if output_filter == ImageProcessor.Filter.DOG:
             return self.__process_dog(img, face, landmarks)
         else:
@@ -196,16 +204,113 @@ class ImageProcessor:
 
 @click.command()
 @click.option('--input', '-i', type=click.Path(exists=True))
-@click.option('--output', '-o', type=click.Path())
-@click.argument('operation', type=click.Choice(['apply_filter', 'create_hdf5']))
+@click.option('--output', '-o', type=click.Path(exists=True))
+@click.argument('operation', type=click.Choice(['apply_filter', 'create_hdf5', 'check_hdf5']))
 def main(input, output, operation):
     """ Runs data processing scripts to turn raw data from (../raw) into
         cleaned data ready to be analyzed (saved in ../processed).
     """
     if operation == 'apply_filter':
         apply_filter(input, output)
-    else:
-        raise NotImplementedError("Unsupported operation: {}".format(operation))
+    elif operation == 'create_hdf5':
+        create_hdf5(input, output)
+    elif operation == 'check_hdf5':
+        check_hdf5(input)
+
+
+def check_hdf5(input_filepath):
+    with h5py.File(input_filepath, "r") as hf:
+        data_orig = hf["train_orig"]
+        data_transformed = hf["train_transformed"]
+        for i in range(data_orig.shape[0]):
+            plt.figure()
+            img = data_orig[i, :, :, :].transpose(1, 2, 0)
+            img2 = data_transformed[i, :, :, :].transpose(1, 2, 0)
+            img = np.concatenate((img, img2), axis=1)
+            plt.imshow(img)
+            plt.show()
+            plt.clf()
+            plt.close()
+
+
+def create_hdf5(input_filepath, output_filepath):
+    logger = logging.getLogger(__name__)
+    logger.info('Generating HDF5')
+
+    database_name = os.path.basename(input_filepath)
+    database_orig_path = os.path.join(input_filepath, INTERIM_ORIG_DIR)
+    database_transformed_path = os.path.join(input_filepath, INTERIM_TRANSFORMED_DIR)
+    if not os.path.exists(database_orig_path):
+        raise IOError('Dir "{}" does not exist'.format(INTERIM_ORIG_DIR))
+    if not os.path.exists(database_transformed_path):
+        raise IOError('Dir "{}" does not exist'.format(INTERIM_TRANSFORMED_DIR))
+
+    orig_images = [img for img in Path(database_orig_path).glob('**/*.jpg')]
+    transformed_images = [img for img in Path(database_transformed_path).glob('**/*.jpg')]
+    if len(orig_images) != len(transformed_images):
+        raise IOError('No. of orig images ({}) does not match transformed images ({})'.format(
+            len(orig_images), len(transformed_images)
+        ))
+    for i in range(len(orig_images)):
+        if os.path.basename(str(orig_images[i])) != os.path.basename(str(transformed_images[i])):
+            raise IOError('Orig images do not match transformed images')
+
+    image_names = [os.path.basename(str(img)) for img in orig_images]
+    n = len(image_names)
+    datasets = OrderedDict([
+        ("train", image_names[:int(DB_SPLIT_TRAIN*n)]),
+        ("val", image_names[int(DB_SPLIT_TRAIN*n):int((DB_SPLIT_TRAIN+DB_SPLIT_VALIDATION)*n)]),
+        ("test", image_names[int((DB_SPLIT_TRAIN+DB_SPLIT_VALIDATION)*n):])
+    ])
+
+    def load_images(name):
+        image_orig_path = os.path.join(database_orig_path, name)
+        image_transformed_path = os.path.join(database_transformed_path, name)
+        img_orig = cv2.imread(image_orig_path)
+        img_orig = img_orig[:, :, ::-1]  # BGR to RGB
+        img_transformed = cv2.imread(image_transformed_path)
+        img_transformed = img_transformed[:, :, ::-1]  # BGR to RGB
+        # HxWxC -> CxHxW
+        img_orig = np.expand_dims(img_orig, 0).transpose([0, 3, 1, 2])
+        img_transformed = np.expand_dims(img_transformed, 0).transpose([0, 3, 1, 2])
+        return img_orig, img_transformed
+
+    # determine image height and width
+    sample_img, _ = load_images(image_names[0])
+    nb_channels, height, width = sample_img.shape[1:]
+
+    output_database_path = os.path.join(output_filepath, "{}.h5".format(database_name))
+    with h5py.File(output_database_path, "w") as hfw:
+        for dataset_type, dataset in datasets.items():
+            data_orig = hfw.create_dataset("%s_orig" % dataset_type,
+                                           (0, nb_channels, height, width),
+                                           maxshape=(None, nb_channels, height, width),
+                                           dtype=np.uint8)
+
+            data_transformed = hfw.create_dataset("%s_transformed" % dataset_type,
+                                             (0, nb_channels, height, width),
+                                             maxshape=(None, nb_channels, height, width),
+                                             dtype=np.uint8)
+
+            dataset_arr = np.array(dataset)
+            num_files = len(dataset_arr)
+            chunk_size = 100
+            num_chunks = num_files / chunk_size
+            arr_chunks = np.array_split(np.arange(num_files), num_chunks)
+
+            for chunk_idx in tqdm(arr_chunks, desc=dataset_type):
+                chunk_image_names = dataset_arr[chunk_idx].tolist()
+                output = parmap.map(load_images, chunk_image_names, pm_parallel=False)
+
+                arr_img_orig = np.concatenate([o[0] for o in output], axis=0)
+                arr_img_transformed = np.concatenate([o[1] for o in output], axis=0)
+
+                # Resize HDF5 dataset
+                data_orig.resize(data_orig.shape[0] + arr_img_orig.shape[0], axis=0)
+                data_transformed.resize(data_transformed.shape[0] + arr_img_transformed.shape[0], axis=0)
+
+                data_orig[-arr_img_orig.shape[0]:] = arr_img_orig.astype(np.uint8)
+                data_transformed[-arr_img_transformed.shape[0]:] = arr_img_transformed.astype(np.uint8)
 
 
 def apply_filter(input_filepath, interim_filepath):
@@ -244,8 +349,6 @@ def apply_filter(input_filepath, interim_filepath):
             img = cv2.imread(raw_image_path)
             has_face = face_detector.has_face(img)
             if has_face:
-                num_accepted += 1
-                filename = "{:05}.jpg".format(num_accepted)
                 orig_image = image_processor.resize(img)
 
                 # skip if scaled+cropped image does not have a detectable face
@@ -253,6 +356,9 @@ def apply_filter(input_filepath, interim_filepath):
                     continue
                 face, landmarks = face_detector.get_landmarks(orig_image)
                 doggy_image = image_processor.process(orig_image, face, landmarks, ImageProcessor.Filter.DOG)
+
+                num_accepted += 1
+                filename = "{:05}.jpg".format(num_accepted)
 
                 map_file.write("{} -> {}\n".format(raw_image_path, filename))
                 map_file.flush()
