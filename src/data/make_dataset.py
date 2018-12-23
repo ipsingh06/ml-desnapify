@@ -21,8 +21,8 @@ import random
 
 MIN_FACE_SIZE = 200
 
-OUTPUT_IMAGE_WIDTH = 500
-OUTPUT_IMAGE_HEIGHT = 500
+OUTPUT_IMAGE_WIDTH = 256
+OUTPUT_IMAGE_HEIGHT = 256
 
 DB_SPLIT_TRAIN = 0.6
 DB_SPLIT_VALIDATION = 0.2
@@ -38,7 +38,7 @@ class FaceDetector:
         model = os.path.join(caascades_path, 'shape_predictor_68_face_landmarks.dat')
         self.__predictor = dlib.shape_predictor(model)
 
-    def has_face(self, img) -> bool:
+    def has_face(self, img, check_size=False) -> bool:
         # convert BGR image to grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
@@ -51,7 +51,7 @@ class FaceDetector:
             return False
         face = faces[0]
         (x, y, w, h) = (face.left(), face.top(), face.width(), face.height())
-        return h > MIN_FACE_SIZE and w > MIN_FACE_SIZE
+        return not check_size or (h > MIN_FACE_SIZE and w > MIN_FACE_SIZE)
 
     def get_landmarks(self, img):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -358,21 +358,24 @@ def apply_filter(input_filepath, interim_filepath):
             except cv2.error:
                 continue
             if has_face:
-                orig_image = image_processor.resize(img)
+                face_image = image_processor.resize(img)
 
                 # skip if scaled+cropped image does not have a detectable face
-                if not face_detector.has_face(orig_image):
+                if not face_detector.has_face(face_image, check_size=False):
                     continue
-                face, landmarks = face_detector.get_landmarks(orig_image)
-                doggy_image = image_processor.process(orig_image, face, landmarks, ImageProcessor.Filter.DOG)
+                face, landmarks = face_detector.get_landmarks(face_image)
+                doggy_image = image_processor.process(face_image, face, landmarks, ImageProcessor.Filter.DOG)
 
                 num_accepted += 1
                 filename = "{:05}.jpg".format(num_accepted)
 
+                # Write the images
+                #    filtered -> orig
+                #    face -> transformed
                 map_file.write("{} -> {}\n".format(raw_image_path, filename))
                 map_file.flush()
-                cv2.imwrite(os.path.join(database_orig_path, filename), orig_image)
-                cv2.imwrite(os.path.join(database_transformed_path, filename), doggy_image)
+                cv2.imwrite(os.path.join(database_orig_path, filename), doggy_image)
+                cv2.imwrite(os.path.join(database_transformed_path, filename), face_image)
                 progress_bar.set_description("Wrote image file {}".format(filename))
 
     map_file.close()
