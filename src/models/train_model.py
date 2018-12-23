@@ -6,6 +6,7 @@ import time
 from keras.optimizers import Adam
 import keras.backend as K
 from keras.utils import plot_model, generic_utils
+from keras.callbacks import TensorBoard
 import numpy as np
 
 import data_utils
@@ -30,6 +31,7 @@ def main():
 
     model_dir = os.path.join(project_dir, "models")
     fig_dir = os.path.join(project_dir, "reports", "figures")
+    logs_dir = os.path.join(project_dir, "reports", "logs")
     data_dir = os.path.join(project_dir, "data", "processed")
 
     dataset_file = os.path.join(data_dir, "tinder_small_256.h5")
@@ -42,6 +44,13 @@ def main():
     # Get the number of non overlapping patch and the size of input image to the discriminator
     nb_patch, img_dim_disc = data_utils.get_nb_patch(img_dim, patch_size)
 
+    tensorboard = TensorBoard(
+        log_dir=logs_dir,
+        histogram_freq=0,
+        batch_size=batch_size,
+        write_graph=True,
+        write_grads=True
+    )
 
     try:
         # Create optimizers
@@ -80,6 +89,8 @@ def main():
 
         discriminator_model.trainable = True
         discriminator_model.compile(loss='binary_crossentropy', optimizer=opt_discriminator)
+
+        tensorboard.set_model(DCGAN_model)
 
         # Start training
         print("Start training")
@@ -120,10 +131,16 @@ def main():
                 discriminator_model.trainable = True
 
                 batch_counter += 1
-                progbar.add(batch_size, values=[("D logloss", disc_loss),
-                                                ("G tot", gen_loss[0]),
-                                                ("G L1", gen_loss[1]),
-                                                ("G logloss", gen_loss[2])])
+                metrics = [("D logloss", disc_loss),
+                           ("G tot", gen_loss[0]),
+                           ("G L1", gen_loss[1]),
+                           ("G logloss", gen_loss[2])]
+                progbar.add(batch_size, values=metrics)
+
+                tensorboard.on_batch_end(
+                    batch_counter,
+                    logs={k: v for (k, v) in metrics}
+                )
 
                 # Save images for visualization
                 if batch_counter % (n_batch_per_epoch / 2) == 0:
@@ -149,9 +166,15 @@ def main():
 
             print("")
             print('Epoch %s/%s, Time: %s' % (e + 1, nb_epoch, time.time() - start))
+            tensorboard.on_epoch_end(
+                e + 1,
+                logs={k: v for (k, v) in metrics}
+            )
 
     except KeyboardInterrupt:
         pass
+
+    tensorboard.on_train_end()
 
 
 if __name__ == '__main__':
