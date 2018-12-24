@@ -8,38 +8,57 @@ import keras.backend as K
 from keras.utils import plot_model, generic_utils
 from keras.callbacks import TensorBoard
 import numpy as np
+import click
+import math
 
 import data_utils
 import models
 
 
-def main():
+@click.command()
+@click.argument('dataset', type=click.Path(exists=True))
+@click.option('--batch_size', type=int, default=4)
+@click.option('--patch_size', type=(str, int), default=(64, 64))
+@click.option('--epochs', type=int, default=10)
+@click.option('--label_smoothing/--no_label_smoothing', default=False)
+@click.option('--label_flipping', type=click.FloatRange(0.0, 1.0), default=0.0)
+def main(dataset,
+         batch_size,
+         patch_size,
+         epochs,
+         label_smoothing,
+         label_flipping):
     print(project_dir)
 
     image_data_format = "channels_first"
     K.set_image_data_format(image_data_format)
 
     # configuration parameters
-    batch_size = 4
-    n_batch_per_epoch = 100
-    patch_size = (64, 64)
-    nb_epoch = 10
-    label_smoothing = False
-    label_flipping = 0
-
-    epoch_size = n_batch_per_epoch * batch_size
+    print("Config params:")
+    print("  dataset = {}".format(dataset))
+    print("  batch_size = {}".format(batch_size))
+    print("  patch_size = {}".format(patch_size))
+    print("  epochs = {}".format(epochs))
+    print("  label_smoothing = {}".format(label_smoothing))
+    print("  label_flipping = {}".format(label_flipping))
 
     model_dir = os.path.join(project_dir, "models")
     fig_dir = os.path.join(project_dir, "reports", "figures")
     logs_dir = os.path.join(project_dir, "reports", "logs")
-    data_dir = os.path.join(project_dir, "data", "processed")
-
-    dataset_file = os.path.join(data_dir, "tinder_small_256.h5")
 
     # Load and rescale data
     X_transformed_train, X_orig_train, X_transformed_val, X_orig_val = \
-        data_utils.load_data(dataset_file)
+        data_utils.load_data(dataset)
     img_dim = X_orig_train.shape[-3:]
+
+    n_batch_per_epoch = int(math.ceil(X_orig_train.shape[0] / batch_size))
+    epoch_size = n_batch_per_epoch * batch_size
+
+    print("Derived params:")
+    print("  # training samples = {}".format(X_orig_train.shape[0]))
+    print("  # validation samples = {}".format(X_orig_val.shape[0]))
+    print("  n_batch_per_epoch = {}".format(n_batch_per_epoch))
+    print("  epoch_size = {}".format(epoch_size))
 
     # Get the number of non overlapping patch and the size of input image to the discriminator
     nb_patch, img_dim_disc = data_utils.get_nb_patch(img_dim, patch_size)
@@ -94,7 +113,7 @@ def main():
 
         # Start training
         print("Start training")
-        for e in range(nb_epoch):
+        for e in range(epochs):
             # Initialize progbar and batch counter
             progbar = generic_utils.Progbar(epoch_size)
             batch_counter = 1
@@ -165,7 +184,7 @@ def main():
                     break
 
             print("")
-            print('Epoch %s/%s, Time: %s' % (e + 1, nb_epoch, time.time() - start))
+            print('Epoch %s/%s, Time: %s' % (e + 1, epochs, time.time() - start))
             tensorboard.on_epoch_end(
                 e + 1,
                 logs={k: v for (k, v) in metrics}
@@ -173,8 +192,6 @@ def main():
 
     except KeyboardInterrupt:
         pass
-
-    tensorboard.on_train_end()
 
 
 if __name__ == '__main__':
