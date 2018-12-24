@@ -21,9 +21,6 @@ import random
 
 MIN_FACE_SIZE = 200
 
-OUTPUT_IMAGE_WIDTH = 256
-OUTPUT_IMAGE_HEIGHT = 256
-
 DB_SPLIT_TRAIN = 0.6
 DB_SPLIT_VALIDATION = 0.2
 
@@ -322,8 +319,9 @@ def create_hdf5(input_dir, output_path, max_count):
 @main.command()
 @click.argument('input_dir', type=click.Path(exists=True))
 @click.argument('output_dir', type=click.Path())
-@click.option('max_count', '-n', type=click.IntRange(1, math.inf))
-def apply_filter(input_dir, output_dir, max_count):
+@click.option('--max_count', '-n', type=click.IntRange(1, math.inf))
+@click.option('--output_size', type=(int, int), default=(256, 256))
+def apply_filter(input_dir, output_dir, max_count, output_size):
     logger = logging.getLogger(__name__)
     logger.info('Applying filter to raw images')
 
@@ -348,8 +346,8 @@ def apply_filter(input_dir, output_dir, max_count):
     # extract faces
     num_accepted = 0
     face_detector = FaceDetector(os.path.join(str(project_dir), 'src/data/caascades'))
-    image_processor = ImageProcessor(output_width=OUTPUT_IMAGE_WIDTH,
-                                     output_height=OUTPUT_IMAGE_HEIGHT,
+    image_processor = ImageProcessor(output_width=output_size[0],
+                                     output_height=output_size[1],
                                      sprites_path=os.path.join(str(project_dir), 'src/data/sprites'))
 
     with tqdm(raw_images) as progress_bar:
