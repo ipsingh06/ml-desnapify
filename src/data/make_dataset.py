@@ -203,24 +203,15 @@ class ImageProcessor:
         return (x,y,w,h)
 
 
-@click.command()
-@click.option('--input', '-i', type=click.Path(exists=True))
-@click.option('--output', '-o', type=click.Path(exists=True))
-@click.argument('operation', type=click.Choice(['apply_filter', 'create_hdf5', 'check_hdf5']))
-def main(input, output, operation):
-    """ Runs data processing scripts to turn raw data from (../raw) into
-        cleaned data ready to be analyzed (saved in ../processed).
-    """
-    if operation == 'apply_filter':
-        apply_filter(input, output)
-    elif operation == 'create_hdf5':
-        create_hdf5(input, output)
-    elif operation == 'check_hdf5':
-        check_hdf5(input)
+@click.group()
+def main():
+    pass
 
 
-def check_hdf5(input_filepath):
-    with h5py.File(input_filepath, "r") as hf:
+@main.command()
+@click.argument('path', type=click.Path(exists=True))
+def check_hdf5(path):
+    with h5py.File(path, "r") as hf:
         data_orig = hf["train_orig"]
         data_transformed = hf["train_transformed"]
         for i in range(data_orig.shape[0]):
@@ -234,13 +225,16 @@ def check_hdf5(input_filepath):
             plt.close()
 
 
-def create_hdf5(input_filepath, output_filepath):
+@main.command()
+@click.argument('input_dir', type=click.Path(exists=True))
+@click.argument('output_path', type=click.Path())
+@click.option('max_count', '-n', type=click.IntRange(1, math.inf))
+def create_hdf5(input_dir, output_path, max_count):
     logger = logging.getLogger(__name__)
     logger.info('Generating HDF5')
 
-    database_name = os.path.basename(input_filepath)
-    database_orig_path = os.path.join(input_filepath, INTERIM_ORIG_DIR)
-    database_transformed_path = os.path.join(input_filepath, INTERIM_TRANSFORMED_DIR)
+    database_orig_path = os.path.join(input_dir, INTERIM_ORIG_DIR)
+    database_transformed_path = os.path.join(input_dir, INTERIM_TRANSFORMED_DIR)
     if not os.path.exists(database_orig_path):
         raise IOError('Dir "{}" does not exist'.format(INTERIM_ORIG_DIR))
     if not os.path.exists(database_transformed_path):
@@ -261,6 +255,10 @@ def create_hdf5(input_filepath, output_filepath):
     # shuffle
     random.seed(0)
     random.shuffle(image_names)
+
+    # limit max images
+    if max_count is not None:
+        image_names = image_names[:max_count]
 
     n = len(image_names)
     datasets = OrderedDict([
@@ -285,7 +283,7 @@ def create_hdf5(input_filepath, output_filepath):
     sample_img, _ = load_images(image_names[0])
     nb_channels, height, width = sample_img.shape[1:]
 
-    output_database_path = os.path.join(output_filepath, "{}.h5".format(database_name))
+    output_database_path = os.path.join(str(output_path))
     with h5py.File(output_database_path, "w") as hfw:
         for dataset_type, dataset in datasets.items():
             data_orig = hfw.create_dataset("%s_orig" % dataset_type,
@@ -300,37 +298,41 @@ def create_hdf5(input_filepath, output_filepath):
 
             dataset_arr = np.array(dataset)
             num_files = len(dataset_arr)
-            chunk_size = 100
+            chunk_size = min(100, num_files)
             num_chunks = num_files / chunk_size
             arr_chunks = np.array_split(np.arange(num_files), num_chunks)
 
-            for chunk_idx in tqdm(arr_chunks, desc=dataset_type):
-                chunk_image_names = dataset_arr[chunk_idx].tolist()
-                output = parmap.map(load_images, chunk_image_names, pm_parallel=False)
+            with tqdm(arr_chunks, total=num_files, desc=dataset_type) as progress_bar:
+                for chunk_idx in arr_chunks:
+                    chunk_image_names = dataset_arr[chunk_idx].tolist()
+                    output = parmap.map(load_images, chunk_image_names, pm_parallel=False)
 
-                arr_img_orig = np.concatenate([o[0] for o in output], axis=0)
-                arr_img_transformed = np.concatenate([o[1] for o in output], axis=0)
+                    arr_img_orig = np.concatenate([o[0] for o in output], axis=0)
+                    arr_img_transformed = np.concatenate([o[1] for o in output], axis=0)
 
-                # Resize HDF5 dataset
-                data_orig.resize(data_orig.shape[0] + arr_img_orig.shape[0], axis=0)
-                data_transformed.resize(data_transformed.shape[0] + arr_img_transformed.shape[0], axis=0)
+                    # Resize HDF5 dataset
+                    data_orig.resize(data_orig.shape[0] + arr_img_orig.shape[0], axis=0)
+                    data_transformed.resize(data_transformed.shape[0] + arr_img_transformed.shape[0], axis=0)
 
-                data_orig[-arr_img_orig.shape[0]:] = arr_img_orig.astype(np.uint8)
-                data_transformed[-arr_img_transformed.shape[0]:] = arr_img_transformed.astype(np.uint8)
+                    data_orig[-arr_img_orig.shape[0]:] = arr_img_orig.astype(np.uint8)
+                    data_transformed[-arr_img_transformed.shape[0]:] = arr_img_transformed.astype(np.uint8)
+                    progress_bar.update(len(chunk_idx))
 
 
-def apply_filter(input_filepath, interim_filepath):
+@main.command()
+@click.argument('input_dir', type=click.Path(exists=True))
+@click.argument('output_dir', type=click.Path())
+@click.option('max_count', '-n', type=click.IntRange(1, math.inf))
+def apply_filter(input_dir, output_dir, max_count):
     logger = logging.getLogger(__name__)
     logger.info('Applying filter to raw images')
 
-    database_name = os.path.basename(input_filepath)
-
     # create interim directory
-    database_interim_path = os.path.join(interim_filepath, database_name)
+    database_interim_path = output_dir
     database_orig_path = os.path.join(database_interim_path, INTERIM_ORIG_DIR)
     database_transformed_path = os.path.join(database_interim_path, INTERIM_TRANSFORMED_DIR)
     if os.path.exists(database_interim_path):
-        shutil.rmtree(database_interim_path)
+        raise IOError('Output directory already exists')
     os.makedirs(database_interim_path)
     os.makedirs(database_orig_path)
     os.makedirs(database_transformed_path)
@@ -339,7 +341,9 @@ def apply_filter(input_filepath, interim_filepath):
     map_file = open(os.path.join(database_interim_path, 'raw_to_interim_map.txt'), 'w')
 
     # grab raw images
-    raw_images = [img for img in Path(input_filepath).glob('**/*.jpg')]
+    raw_images = [img for img in Path(input_dir).glob('**/*.jpg')]
+    if max_count is not None:
+        raw_images = raw_images[:max_count]
 
     # extract faces
     num_accepted = 0
