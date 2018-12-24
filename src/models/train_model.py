@@ -10,6 +10,7 @@ from keras.callbacks import TensorBoard
 import numpy as np
 import click
 import math
+from datetime import datetime
 
 import data_utils
 import models
@@ -44,7 +45,10 @@ def main(dataset,
 
     model_dir = os.path.join(project_dir, "models")
     fig_dir = os.path.join(project_dir, "reports", "figures")
-    logs_dir = os.path.join(project_dir, "reports", "logs")
+    logs_dir = os.path.join(
+        project_dir, "reports", "logs",
+        datetime.strftime(datetime.now(), '%y%m%d-%H%M')
+    )
 
     # Load and rescale data
     X_transformed_train, X_orig_train, X_transformed_val, X_orig_val = \
