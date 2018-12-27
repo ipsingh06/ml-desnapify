@@ -35,6 +35,8 @@ def main(dataset,
     image_data_format = "channels_first"
     K.set_image_data_format(image_data_format)
 
+    save_images_every_n_batches = 30
+
     # configuration parameters
     print("Config params:")
     print("  dataset = {}".format(dataset))
@@ -43,6 +45,7 @@ def main(dataset,
     print("  epochs = {}".format(epochs))
     print("  label_smoothing = {}".format(label_smoothing))
     print("  label_flipping = {}".format(label_flipping))
+    print("  save_images_every_n_batches = {}".format(save_images_every_n_batches))
 
     model_dir = os.path.join(project_dir, "models")
     fig_dir = os.path.join(project_dir, "reports", "figures")
@@ -89,7 +92,8 @@ def main(dataset,
         histogram_freq=0,
         batch_size=batch_size,
         write_graph=True,
-        write_grads=True
+        write_grads=True,
+        update_freq='batch'
     )
 
     try:
@@ -180,13 +184,16 @@ def main(dataset,
                            ("G logloss", gen_loss[2])]
                 progbar.add(batch_size, values=metrics)
 
+                logs = {k: v for (k, v) in metrics}
+                logs["size"] = batch_size
+
                 tensorboard.on_batch_end(
                     batch_counter,
-                    logs={k: v for (k, v) in metrics}
+                    logs=logs
                 )
 
                 # Save images for visualization
-                if batch_counter % (n_batch_per_epoch / 2) == 0:
+                if batch_counter % save_images_every_n_batches == 0:
                     # Get new images from validation
                     data_utils.plot_generated_batch(
                         X_transformed_batch,
@@ -206,7 +213,7 @@ def main(dataset,
             print('Epoch %s/%s, Time: %s' % (e + 1, epochs, time.time() - start))
             tensorboard.on_epoch_end(
                 e + 1,
-                logs={k: v for (k, v) in metrics}
+                logs=logs
             )
 
     except KeyboardInterrupt:
