@@ -6,6 +6,7 @@ import time
 from keras.optimizers import Adam
 import keras.backend as K
 from keras.utils import plot_model, generic_utils
+from keras.utils.data_utils import OrderedEnqueuer
 from keras.callbacks import TensorBoard
 import numpy as np
 import click
@@ -51,18 +52,34 @@ def main(dataset,
     )
 
     # Load and rescale data
-    X_transformed_train, X_orig_train, X_transformed_val, X_orig_val = \
-        data_utils.load_data(dataset)
-    img_dim = X_orig_train.shape[-3:]
+    ds_train_gen = data_utils.DataGenerator(file_path=dataset,
+                                            dataset_type="train",
+                                            batch_size=batch_size)
+    ds_train_disc = data_utils.DataGenerator(file_path=dataset,
+                                             dataset_type="train",
+                                             batch_size=batch_size)
+    ds_val = data_utils.DataGenerator(file_path=dataset,
+                                      dataset_type="val",
+                                      batch_size=batch_size)
+    enq_train_gen = OrderedEnqueuer(ds_train_gen,
+                                    use_multiprocessing=True,
+                                    shuffle=True)
+    enq_train_disc = OrderedEnqueuer(ds_train_disc,
+                                     use_multiprocessing=True,
+                                     shuffle=True)
+    enq_val = OrderedEnqueuer(ds_val,
+                              use_multiprocessing=True,
+                              shuffle=False)
 
-    n_batch_per_epoch = int(math.ceil(X_orig_train.shape[0] / batch_size))
+    img_dim = ds_train_gen[0][0].shape[-3:]
+
+    n_batch_per_epoch = len(ds_train_gen)
     epoch_size = n_batch_per_epoch * batch_size
 
     print("Derived params:")
-    print("  # training samples = {}".format(X_orig_train.shape[0]))
-    print("  # validation samples = {}".format(X_orig_val.shape[0]))
     print("  n_batch_per_epoch = {}".format(n_batch_per_epoch))
     print("  epoch_size = {}".format(epoch_size))
+    print("  n_batches_val = {}".format(len(ds_val)))
 
     # Get the number of non overlapping patch and the size of input image to the discriminator
     nb_patch, img_dim_disc = data_utils.get_nb_patch(img_dim, patch_size)
@@ -116,15 +133,21 @@ def main(dataset,
         tensorboard.set_model(DCGAN_model)
 
         # Start training
+        enq_train_gen.start(workers=1, max_queue_size=20)
+        enq_train_disc.start(workers=1, max_queue_size=20)
+        enq_val.start(workers=1, max_queue_size=20)
+        out_train_gen = enq_train_gen.get()
+        out_train_disc = enq_train_disc.get()
+        out_val = enq_val.get()
+
         print("Start training")
         for e in range(epochs):
             # Initialize progbar and batch counter
             progbar = generic_utils.Progbar(epoch_size)
-            batch_counter = 1
             start = time.time()
 
-            for X_transformed_batch, X_orig_batch in data_utils.gen_batch(
-                    X_transformed_train, X_orig_train, batch_size):
+            for batch_counter in range(1, n_batch_per_epoch+1):
+                X_transformed_batch, X_orig_batch = next(out_train_disc)
 
                 # Create a batch to feed the discriminator model
                 X_disc, y_disc = data_utils.get_disc_batch(
@@ -141,9 +164,7 @@ def main(dataset,
                 disc_loss = discriminator_model.train_on_batch(X_disc, y_disc)
 
                 # Create a batch to feed the generator model
-                X_gen_target, X_gen = next(data_utils.gen_batch(
-                    X_transformed_train, X_orig_train, batch_size
-                ))
+                X_gen_target, X_gen = next(out_train_gen)
                 y_gen = np.zeros((X_gen.shape[0], 2), dtype=np.uint8)
                 y_gen[:, 1] = 1
 
@@ -153,7 +174,6 @@ def main(dataset,
                 # Unfreeze the discriminator
                 discriminator_model.trainable = True
 
-                batch_counter += 1
                 metrics = [("D logloss", disc_loss),
                            ("G tot", gen_loss[0]),
                            ("G L1", gen_loss[1]),
@@ -172,20 +192,15 @@ def main(dataset,
                         X_transformed_batch,
                         X_orig_batch,
                         generator_model,
-                        os.path.join(fig_dir, "current_batch_training.png")
+                        os.path.join(logs_dir, "current_batch_training.png")
                     )
-                    X_transformed_batch, X_orig_batch = next(data_utils.gen_batch(
-                        X_transformed_val, X_orig_val, batch_size
-                    ))
+                    X_transformed_batch, X_orig_batch = next(out_val)
                     data_utils.plot_generated_batch(
                         X_transformed_batch,
                         X_orig_batch,
                         generator_model,
-                        os.path.join(fig_dir, "current_batch_validation.png")
+                        os.path.join(logs_dir, "current_batch_validation.png")
                     )
-
-                if batch_counter >= n_batch_per_epoch:
-                    break
 
             print("")
             print('Epoch %s/%s, Time: %s' % (e + 1, epochs, time.time() - start))
@@ -196,6 +211,10 @@ def main(dataset,
 
     except KeyboardInterrupt:
         pass
+
+    enq_train_gen.stop()
+    enq_train_disc.stop()
+    enq_val.stop()
 
 
 if __name__ == '__main__':

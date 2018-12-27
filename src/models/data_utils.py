@@ -1,6 +1,30 @@
 import numpy as np
 import h5py
 import matplotlib.pylab as plt
+from keras.utils import Sequence
+from multiprocessing import Lock
+
+
+class DataGenerator(Sequence):
+    # Need a global mutex here because h5py doesn't handle multiprocessing
+    __GLOBAL_MUTEX = Lock()
+
+    def __init__(self, file_path, dataset_type, batch_size):
+        hf = h5py.File(file_path, 'r')
+        self.dataset_transformed = hf["%s_transformed" % dataset_type]
+        self.dataset_orig = hf["%s_orig" % dataset_type]
+        self.batch_size = batch_size
+
+    def __len__(self):
+        return int(np.floor(self.dataset_transformed.shape[0] / self.batch_size))
+
+    def __getitem__(self, index):
+        i, j = index*self.batch_size, (index+1)*self.batch_size
+        DataGenerator.__GLOBAL_MUTEX.acquire()
+        batch_transformed = self.dataset_transformed[i:j].astype(np.float32)
+        batch_orig = self.dataset_orig[i:j].astype(np.float32)
+        DataGenerator.__GLOBAL_MUTEX.release()
+        return normalization(batch_transformed), normalization(batch_orig)
 
 
 def normalization(X):
@@ -11,37 +35,12 @@ def inverse_normalization(X):
     return (X + 1.) / 2.
 
 
-def load_data(file):
-    with h5py.File(file, "r") as hf:
-
-        X_transformed_train = hf["train_transformed"][:].astype(np.float32)
-        X_transformed_train = normalization(X_transformed_train)
-
-        X_orig_train = hf["train_orig"][:].astype(np.float32)
-        X_orig_train = normalization(X_orig_train)
-
-        X_transformed_val = hf["val_transformed"][:].astype(np.float32)
-        X_transformed_val = normalization(X_transformed_val)
-
-        X_orig_val = hf["val_orig"][:].astype(np.float32)
-        X_orig_val = normalization(X_orig_val)
-
-        return X_transformed_train, X_orig_train, X_transformed_val, X_orig_val
-
-
 def get_nb_patch(img_dim, patch_size):
     assert img_dim[1] % patch_size[0] == 0, "patch_size does not divide height"
     assert img_dim[2] % patch_size[1] == 0, "patch_size does not divide width"
     nb_patch = (img_dim[1] // patch_size[0]) * (img_dim[2] // patch_size[1])
     img_dim_disc = (img_dim[0], patch_size[0], patch_size[1])
     return nb_patch, img_dim_disc
-
-
-def gen_batch(X1, X2, batch_size):
-
-    while True:
-        idx = np.random.choice(X1.shape[0], batch_size, replace=False)
-        yield X1[idx], X2[idx]
 
 
 def get_disc_batch(X_transformed_batch, X_orig_batch, generator_model, batch_counter, patch_size,
