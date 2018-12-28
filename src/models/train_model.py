@@ -12,6 +12,7 @@ import numpy as np
 import click
 import math
 from datetime import datetime
+import sys
 
 import data_utils
 import models
@@ -36,6 +37,7 @@ def main(dataset,
     K.set_image_data_format(image_data_format)
 
     save_images_every_n_batches = 30
+    save_model_every_n_epochs = 0
 
     # configuration parameters
     print("Config params:")
@@ -46,13 +48,14 @@ def main(dataset,
     print("  label_smoothing = {}".format(label_smoothing))
     print("  label_flipping = {}".format(label_flipping))
     print("  save_images_every_n_batches = {}".format(save_images_every_n_batches))
+    print("  save_model_every_n_epochs = {}".format(save_model_every_n_epochs))
 
-    model_dir = os.path.join(project_dir, "models")
+    model_name = datetime.strftime(datetime.now(), '%y%m%d-%H%M')
+    model_dir = os.path.join(project_dir, "models", model_name)
     fig_dir = os.path.join(project_dir, "reports", "figures")
-    logs_dir = os.path.join(
-        project_dir, "reports", "logs",
-        datetime.strftime(datetime.now(), '%y%m%d-%H%M')
-    )
+    logs_dir = os.path.join(project_dir, "reports", "logs", model_name)
+
+    os.makedirs(model_dir)
 
     # Load and rescale data
     ds_train_gen = data_utils.DataGenerator(file_path=dataset,
@@ -145,7 +148,7 @@ def main(dataset,
         out_val = enq_val.get()
 
         print("Start training")
-        for e in range(epochs):
+        for e in range(1, epochs+1):
             # Initialize progbar and batch counter
             progbar = generic_utils.Progbar(epoch_size)
             start = time.time()
@@ -210,11 +213,22 @@ def main(dataset,
                     )
 
             print("")
-            print('Epoch %s/%s, Time: %s' % (e + 1, epochs, time.time() - start))
-            tensorboard.on_epoch_end(
-                e + 1,
-                logs=logs
-            )
+            print('Epoch %s/%s, Time: %s' % (e, epochs, time.time() - start))
+            tensorboard.on_epoch_end(e, logs=logs)
+
+            if (save_model_every_n_epochs >= 1 and e % save_model_every_n_epochs == 0) or \
+                    (e == epochs):
+                print("Saving model for epoch {}...".format(e), end="")
+                sys.stdout.flush()
+                gen_weights_path = os.path.join(model_dir, 'gen_weights_epoch{:03d}.h5'.format(e))
+                generator_model.save_weights(gen_weights_path, overwrite=True)
+
+                disc_weights_path = os.path.join(model_dir, 'disc_weights_epoch{:03d}.h5'.format(e))
+                discriminator_model.save_weights(disc_weights_path, overwrite=True)
+
+                DCGAN_weights_path = os.path.join(model_dir, 'DCGAN_weights_epoch{:03d}.h5'.format(e))
+                DCGAN_model.save_weights(DCGAN_weights_path, overwrite=True)
+                print("done")
 
     except KeyboardInterrupt:
         pass
