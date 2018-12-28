@@ -8,9 +8,9 @@ import keras.backend as K
 from keras.utils import plot_model, generic_utils
 from keras.utils.data_utils import OrderedEnqueuer
 from keras.callbacks import TensorBoard
+import tensorflow as tf
 import numpy as np
 import click
-import math
 from datetime import datetime
 import sys
 
@@ -32,6 +32,11 @@ def main(dataset,
          label_smoothing,
          label_flipping):
     print(project_dir)
+
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
+    sess = tf.Session(config=config)
+    K.tensorflow_backend.set_session(sess)  # set this TensorFlow session as the default session for Keras
 
     image_data_format = "channels_first"
     K.set_image_data_format(image_data_format)
