@@ -213,6 +213,7 @@ def check_hdf5(path):
         data_transformed = hf["train_transformed"]
         for i in range(data_orig.shape[0]):
             plt.figure()
+            # CxHxW -> HxWxC
             img = data_orig[i, :, :, :].transpose(1, 2, 0)
             img2 = data_transformed[i, :, :, :].transpose(1, 2, 0)
             img = np.concatenate((img, img2), axis=1)
