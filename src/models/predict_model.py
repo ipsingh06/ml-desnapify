@@ -34,10 +34,9 @@ def load_and_resize_image(path,
     return open_cv_image
 
 
-def get_batch_from_images(image_paths, batch_size, image_size):
-    for i in range(0, len(image_paths), batch_size):
-        batch_image_paths = image_paths[i:i+batch_size]
-        batch_images = [load_and_resize_image(path, image_size) for path in batch_image_paths]
+def get_batch_from_images(input_paths, truth_paths, batch_size, image_size):
+    def gen_batch_array(paths):
+        batch_images = [load_and_resize_image(path, image_size) for path in paths]
         batch = np.stack(batch_images)
         # pad with zeros if needed
         if batch.shape[0] < batch_size:
@@ -45,10 +44,15 @@ def get_batch_from_images(image_paths, batch_size, image_size):
             padded_batch[:batch.shape[0], :, :, :] = batch
             batch = padded_batch
         batch = data_utils.normalization(batch)
+        return batch
+
+    for i in range(0, len(input_paths), batch_size):
+        batch_input_paths = input_paths[i:i + batch_size]
+        batch_truth_paths = truth_paths[i:i + batch_size]
         batch_record = BatchRecord(
-            input=batch,
-            truth=None,
-            image_names=[os.path.basename(path) for path in batch_image_paths]
+            input=gen_batch_array(batch_input_paths),
+            truth=gen_batch_array(batch_truth_paths) if truth_paths else None,
+            image_names=[os.path.basename(path) for path in batch_input_paths]
         )
         yield batch_record
 
@@ -69,14 +73,17 @@ def get_batch_from_hdf5(generator):
 @click.command()
 @click.argument('model', type=click.Path(exists=True))
 @click.argument('input', type=click.Path(exists=True))
+@click.option('-t', '--truth', type=click.Path(exists=True),
+              help='Path to ground truth image or directory of images')
 @click.option('-o', '--output', type=click.Path(), help='Output images to file')
 @click.option('--image_size', type=(int, int), default=(256, 256), help='Model input size')
 @click.option('--concat/--no_concat', default=True,
               help='Whether to concat input and ground truth to output images')
 @click.option('-b', '--batch_size', type=int, default=4)
-@click.option('--dataset', type=str, default='test', help='Dataset to use for hdf5')
+@click.option('--dataset', type=str, default='test', help='Dataset label to use for hdf5 (default=test)')
 def main(model,
          input,
+         truth,
          output,
          image_size,
          concat,
@@ -99,14 +106,22 @@ def main(model,
         count = len(generator) * batch_size
     elif os.path.isdir(input):
         # Directory of images
-        image_paths = [str(img) for img in sorted(Path(input).glob('**/*.jpg'))]
-        batch_gen = get_batch_from_images(image_paths, batch_size, image_size)
-        count = len(image_paths)
+        input_paths = [str(img) for img in sorted(Path(input).glob('**/*.jpg'))]
+        if truth is not None:
+            truth_paths = [str(img) for img in sorted(Path(truth).glob('**/*.jpg'))]
+        else:
+            truth_paths = []
+        batch_gen = get_batch_from_images(input_paths, truth_paths, batch_size, image_size)
+        count = len(input_paths)
     else:
         # Single image file
-        image_paths = [input]
+        input_paths = [input]
+        if truth is not None:
+            truth_paths = [truth]
+        else:
+            truth_paths = []
         batch_size = 1
-        batch_gen = get_batch_from_images(image_paths, batch_size, image_size)
+        batch_gen = get_batch_from_images(input_paths, truth_paths, batch_size, image_size)
         count = 1
 
     # Setup the output
