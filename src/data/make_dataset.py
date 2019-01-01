@@ -17,6 +17,7 @@ import h5py
 import parmap
 from collections import OrderedDict
 import random
+import hashlib
 
 
 MIN_FACE_SIZE = 200
@@ -209,6 +210,14 @@ class ImageProcessor:
         return (x,y,w,h)
 
 
+def md5(fname):
+    hash_md5 = hashlib.md5()
+    with open(fname, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+
 @click.group()
 def main():
     pass
@@ -333,11 +342,14 @@ def create_hdf5(input_dir, output_path, max_count):
 @click.option('--output_size', type=(int, int), default=(256, 256))
 @click.option('--preserve_dir/--no_preserve_dir', default=True,
               help='Preserve the original directory structure (default=True)')
+@click.option('--ignore_duplicates/--no_ignore_duplicates', default=True,
+              help='Ignore duplicate images (default=True)')
 def apply_filter(input_dir,
                  output_dir,
                  max_count,
                  output_size,
-                 preserve_dir):
+                 preserve_dir,
+                 ignore_duplicates):
     logger = logging.getLogger(__name__)
     logger.info('Applying filter to raw images')
 
@@ -370,11 +382,22 @@ def apply_filter(input_dir,
                                      output_height=output_size[1],
                                      sprites_path=os.path.join(str(project_dir), 'src/data/sprites'))
 
+    # image hashes
+    hashes = set()
+
     with tqdm(raw_images) as progress_bar:
         for raw_image_path in progress_bar:
             raw_image_path = str(raw_image_path)
             base_path = os.path.relpath(os.path.dirname(raw_image_path),
                                         start=input_dir)
+
+            # skip if image is duplicate
+            if ignore_duplicates:
+                file_hash = md5(raw_image_path)
+                if file_hash in hashes:
+                    continue
+                hashes.add(file_hash)
+
             # load color (BGR) image
             try:
                 img = cv2.imread(raw_image_path)
@@ -387,6 +410,7 @@ def apply_filter(input_dir,
                 # skip if scaled+cropped image does not have a detectable face
                 if not face_detector.has_face(face_image, check_size=False):
                     continue
+
                 face, landmarks = face_detector.get_landmarks(face_image)
                 doggy_image = image_processor.process(face_image, face, landmarks, ImageProcessor.Filter.DOG)
 
