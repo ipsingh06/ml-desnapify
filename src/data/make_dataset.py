@@ -100,6 +100,13 @@ class ImageProcessor:
             raise NotImplementedError("Unsupported filter {}".format(output_filter))
 
     def __process_dog(self, img, face, landmarks):
+        def adjust_bounding_box(_x, _y, _w, _h, factor):
+            factor_x, factor_y = factor
+            center_x, center_y = _x+int(_w/2.0), _y+int(_h/2.0)
+            _w, _h = int(factor_x*_w), int(factor_y*_h)
+            _x, _y = center_x-int(_w/2.0), center_y-int(_h/2.0)
+            return _x, _y, _w, _h
+
         (x, y, w, h) = (face.left(), face.top(), face.width(), face.height())
         # inclination based on eyebrows
         incl = ImageProcessor.__calculate_inclination(landmarks[17], landmarks[26])
@@ -107,9 +114,11 @@ class ImageProcessor:
         is_mouth_open = (landmarks[66][1] - landmarks[62][1]) >= 10
         (x0, y0, w0, h0) = ImageProcessor.__get_face_boundbox(landmarks, 6)  # bound box of mouth
         (x3, y3, w3, h3) = ImageProcessor.__get_face_boundbox(landmarks, 5)  # nose
-        # expand the nose bounding box
-        x3 = x3 - int(w3/2.0)
-        w3 = int(w3*2.0)
+
+        # expand the nose bounding box to adjust the nose
+        x3, y3, w3, h3 = adjust_bounding_box(x3, y3, w3, h3, (2.7, 1.5))
+        # expand the face bounding box to adjust the ears
+        x, y, w, h = adjust_bounding_box(x, y, w, h, (1.35, 1.0))
 
         self.__apply_sprite(img, 'doggy_nose.png', w3, x3, y3, incl, ontop=False)
 
