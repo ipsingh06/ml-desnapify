@@ -331,19 +331,29 @@ def create_hdf5(input_dir, output_path, max_count):
 @click.argument('output_dir', type=click.Path())
 @click.option('--max_count', '-n', type=click.IntRange(1, math.inf))
 @click.option('--output_size', type=(int, int), default=(256, 256))
-def apply_filter(input_dir, output_dir, max_count, output_size):
+@click.option('--preserve_dir/--no_preserve_dir', default=True,
+              help='Preserve the original directory structure (default=True)')
+def apply_filter(input_dir,
+                 output_dir,
+                 max_count,
+                 output_size,
+                 preserve_dir):
     logger = logging.getLogger(__name__)
     logger.info('Applying filter to raw images')
 
     # create interim directory
     database_interim_path = output_dir
-    database_orig_path = os.path.join(database_interim_path, INTERIM_ORIG_DIR)
-    database_transformed_path = os.path.join(database_interim_path, INTERIM_TRANSFORMED_DIR)
     if os.path.exists(database_interim_path):
         raise IOError('Output directory already exists')
     os.makedirs(database_interim_path)
-    os.makedirs(database_orig_path)
-    os.makedirs(database_transformed_path)
+
+    database_orig_path = None
+    database_transformed_path = None
+    if not preserve_dir:
+        database_orig_path = os.path.join(database_interim_path, INTERIM_ORIG_DIR)
+        database_transformed_path = os.path.join(database_interim_path, INTERIM_TRANSFORMED_DIR)
+        os.makedirs(database_orig_path)
+        os.makedirs(database_transformed_path)
 
     # file to map raw image names to filtered image names
     map_file = open(os.path.join(database_interim_path, 'raw_to_interim_map.txt'), 'w')
@@ -363,6 +373,8 @@ def apply_filter(input_dir, output_dir, max_count, output_size):
     with tqdm(raw_images) as progress_bar:
         for raw_image_path in progress_bar:
             raw_image_path = str(raw_image_path)
+            base_path = os.path.relpath(os.path.dirname(raw_image_path),
+                                        start=input_dir)
             # load color (BGR) image
             try:
                 img = cv2.imread(raw_image_path)
@@ -384,8 +396,25 @@ def apply_filter(input_dir, output_dir, max_count, output_size):
                 # Write the images
                 #    filtered -> orig
                 #    face -> transformed
-                map_file.write("{} -> {}\n".format(raw_image_path, filename))
+
+                if preserve_dir:
+                    database_orig_path = os.path.join(database_interim_path,
+                                                      base_path,
+                                                      INTERIM_ORIG_DIR)
+                    database_transformed_path = os.path.join(database_interim_path,
+                                                             base_path,
+                                                             INTERIM_TRANSFORMED_DIR)
+                    if not os.path.exists(database_orig_path):
+                        os.makedirs(database_orig_path)
+                    if not os.path.exists(database_transformed_path):
+                        os.makedirs(database_transformed_path)
+
+                map_file.write("{} -> {}\n".format(
+                    raw_image_path,
+                    os.path.join(database_orig_path, filename))
+                )
                 map_file.flush()
+
                 cv2.imwrite(os.path.join(database_orig_path, filename), doggy_image)
                 cv2.imwrite(os.path.join(database_transformed_path, filename), face_image)
                 progress_bar.set_description("Wrote image file {}".format(filename))
