@@ -367,9 +367,6 @@ def apply_filter(input_dir,
         os.makedirs(database_orig_path)
         os.makedirs(database_transformed_path)
 
-    # file to map raw image names to filtered image names
-    map_file = open(os.path.join(database_interim_path, 'raw_to_interim_map.txt'), 'w')
-
     # grab raw images
     raw_images = [img for img in Path(input_dir).glob('**/*.jpg')]
     if max_count is not None:
@@ -415,7 +412,7 @@ def apply_filter(input_dir,
                 doggy_image = image_processor.process(face_image, face, landmarks, ImageProcessor.Filter.DOG)
 
                 num_accepted += 1
-                filename = "{:05}.jpg".format(num_accepted)
+                filename = os.path.basename(raw_image_path)
 
                 # Write the images
                 #    filtered -> orig
@@ -433,17 +430,11 @@ def apply_filter(input_dir,
                     if not os.path.exists(database_transformed_path):
                         os.makedirs(database_transformed_path)
 
-                map_file.write("{} -> {}\n".format(
-                    raw_image_path,
-                    os.path.join(database_orig_path, filename))
-                )
-                map_file.flush()
-
                 cv2.imwrite(os.path.join(database_orig_path, filename), doggy_image)
                 cv2.imwrite(os.path.join(database_transformed_path, filename), face_image)
-                progress_bar.set_description("Wrote image file {}".format(filename))
-
-    map_file.close()
+                progress_bar.set_description(
+                    "Wrote image file {} (accepted={})".format(filename, num_accepted)
+                )
 
 
 if __name__ == '__main__':
