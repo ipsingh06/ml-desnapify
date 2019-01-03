@@ -244,8 +244,9 @@ def check_hdf5(path):
 @main.command()
 @click.argument('input_dir', type=click.Path(exists=True))
 @click.argument('output_path', type=click.Path())
-@click.option('max_count', '-n', type=click.IntRange(1, math.inf))
-def create_hdf5(input_dir, output_path, max_count):
+@click.option('--max_count', '-n', type=click.IntRange(1, math.inf))
+@click.option('--shuffle/--no_shuffle', default=True)
+def create_hdf5(input_dir, output_path, max_count, shuffle):
     logger = logging.getLogger(__name__)
     logger.info('Generating HDF5')
 
@@ -269,8 +270,9 @@ def create_hdf5(input_dir, output_path, max_count):
     image_names = [os.path.basename(str(img)) for img in orig_images]
 
     # shuffle
-    random.seed(0)
-    random.shuffle(image_names)
+    if shuffle:
+        random.seed(0)
+        random.shuffle(image_names)
 
     # limit max images
     if max_count is not None:
