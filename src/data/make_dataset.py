@@ -429,6 +429,10 @@ def apply_filter(input_dir,
                         os.makedirs(database_orig_path)
                     if not os.path.exists(database_transformed_path):
                         os.makedirs(database_transformed_path)
+                else:
+                    # append base path to filename to prevent collisions
+                    if base_path != '.':
+                        filename = base_path.replace(os.path.sep, '_') + '_' + filename
 
                 cv2.imwrite(os.path.join(database_orig_path, filename), doggy_image)
                 cv2.imwrite(os.path.join(database_transformed_path, filename), face_image)
