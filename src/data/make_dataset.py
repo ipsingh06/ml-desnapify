@@ -434,6 +434,8 @@ def apply_filter(input_dir,
             # load color (BGR) image
             try:
                 img = cv2.imread(raw_image_path)
+                if img is None:
+                    continue
                 resized_image = image_processor.resize(img)
                 has_face = face_detector.has_face(resized_image)
             except cv2.error:
