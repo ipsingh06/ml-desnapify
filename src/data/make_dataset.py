@@ -113,17 +113,18 @@ class ImageProcessor:
         incl = ImageProcessor.__calculate_inclination(landmarks[17], landmarks[26])
         # y coordiantes of landmark points of lips
         is_mouth_open = (landmarks[66][1] - landmarks[62][1]) >= 10
-        (x0, y0, w0, h0) = ImageProcessor.__get_face_boundbox(landmarks, 6)  # bound box of mouth
-        (x3, y3, w3, h3) = ImageProcessor.__get_face_boundbox(landmarks, 5)  # nose
+        (x0, y0, w0, h0) = ImageProcessor.__get_face_boundbox(landmarks, face, 6)  # bound box of mouth
+        (x3, y3, w3, h3) = ImageProcessor.__get_face_boundbox(landmarks, face, 5)  # nose
+        (x4, y4, w4, h4) = ImageProcessor.__get_face_boundbox(landmarks, face, 8)  # top of head
 
         # expand the nose bounding box to adjust the nose
         x3, y3, w3, h3 = adjust_bounding_box(x3, y3, w3, h3, (2.7, 1.5))
         # expand the face bounding box to adjust the ears
-        x, y, w, h = adjust_bounding_box(x, y, w, h, (1.35, 1.0))
+        x4, y4, w4, h4 = adjust_bounding_box(x4, y4, w4, h4, (1.7, 1.0))
 
         self.__apply_sprite(img, 'doggy_nose.png', w3, x3, y3, incl, ontop=False)
 
-        self.__apply_sprite(img, 'doggy_ears.png', w, x, y, incl)
+        self.__apply_sprite(img, 'doggy_ears.png', w4, x4, y4, incl, ontop=False)
 
         if is_mouth_open:
             self.__apply_sprite(img, 'doggy_tongue.png', w0, x0, y0, incl, ontop=False)
@@ -186,7 +187,7 @@ class ImageProcessor:
         return (sprite, y_orig)
 
     @staticmethod
-    def __get_face_boundbox(points, face_part):
+    def __get_face_boundbox(points, face, face_part):
         if face_part == 1:
             (x,y,w,h) = ImageProcessor.__calculate_boundbox(points[17:22]) #left eyebrow
         elif face_part == 2:
@@ -199,6 +200,39 @@ class ImageProcessor:
             (x,y,w,h) = ImageProcessor.__calculate_boundbox(points[29:36]) #nose
         elif face_part == 6:
             (x,y,w,h) = ImageProcessor.__calculate_boundbox(points[48:68]) #mouth
+        elif face_part == 7:
+            # compute the rotated box for forehead
+            (x, y, w, h) = (face.left(), face.top(), face.width(), face.height())
+            h5 = h * 0.5  # scale forehead according to face bb height
+            x5_1 = points[17][0]  # left eyebrow
+            y5_1 = points[17][1]
+            x5_2 = points[26][0]  # right eyebrow
+            y5_2 = points[26][1]
+            incl = ImageProcessor.__calculate_inclination(points[17], points[26])
+            x5_3 = x5_2 + int(h5 * math.sin(incl * math.pi / 180.0))
+            y5_3 = y5_2 - int(h5 * math.cos(incl * math.pi / 180.0))
+            x5_4 = x5_1 + int(h5 * math.sin(incl * math.pi / 180.0))
+            y5_4 = y5_1 - int(h5 * math.cos(incl * math.pi / 180.0))
+            (x, y, w, h) = ImageProcessor.__calculate_boundbox(
+                np.array([[x5_1, y5_1], [x5_2, y5_2], [x5_3, y5_3], [x5_4, y5_4]])
+            )  #forehead
+        elif face_part == 8:
+            # compute the rotated box for top of head
+            incl = ImageProcessor.__calculate_inclination(points[17], points[26])
+            (x, y, w, h) = (face.left(), face.top(), face.width(), face.height())
+            h5 = h * 0.2  # height from eyebrow to bottom of the region
+            h6 = h * 0.5  # height of the region
+            x5_1 = points[17][0] + int(h5 * math.sin(incl * math.pi / 180.0))
+            y5_1 = points[17][1] - int(h5 * math.cos(incl * math.pi / 180.0))
+            x5_2 = points[26][0] + int(h5 * math.sin(incl * math.pi / 180.0))
+            y5_2 = points[26][1] - int(h5 * math.cos(incl * math.pi / 180.0))
+            x5_3 = x5_2 + int(h6 * math.sin(incl * math.pi / 180.0))
+            y5_3 = y5_2 - int(h6 * math.cos(incl * math.pi / 180.0))
+            x5_4 = x5_1 + int(h6 * math.sin(incl * math.pi / 180.0))
+            y5_4 = y5_1 - int(h6 * math.cos(incl * math.pi / 180.0))
+            (x, y, w, h) = ImageProcessor.__calculate_boundbox(
+                np.array([[x5_1, y5_1], [x5_2, y5_2], [x5_3, y5_3], [x5_4, y5_4]])
+            )  #top of head
         return (x,y,w,h)
 
     @staticmethod
@@ -400,18 +434,14 @@ def apply_filter(input_dir,
             # load color (BGR) image
             try:
                 img = cv2.imread(raw_image_path)
-                has_face = face_detector.has_face(img)
+                resized_image = image_processor.resize(img)
+                has_face = face_detector.has_face(resized_image)
             except cv2.error:
                 continue
+
             if has_face:
-                face_image = image_processor.resize(img)
-
-                # skip if scaled+cropped image does not have a detectable face
-                if not face_detector.has_face(face_image, check_size=False):
-                    continue
-
-                face, landmarks = face_detector.get_landmarks(face_image)
-                doggy_image = image_processor.process(face_image, face, landmarks, ImageProcessor.Filter.DOG)
+                face, landmarks = face_detector.get_landmarks(resized_image)
+                doggy_image = image_processor.process(resized_image, face, landmarks, ImageProcessor.Filter.DOG)
 
                 num_accepted += 1
                 filename = os.path.basename(raw_image_path)
@@ -437,7 +467,7 @@ def apply_filter(input_dir,
                         filename = base_path.replace(os.path.sep, '_') + '_' + filename
 
                 cv2.imwrite(os.path.join(database_orig_path, filename), doggy_image)
-                cv2.imwrite(os.path.join(database_transformed_path, filename), face_image)
+                cv2.imwrite(os.path.join(database_transformed_path, filename), resized_image)
                 progress_bar.set_description(
                     "Wrote image file {} (accepted={})".format(filename, num_accepted)
                 )
