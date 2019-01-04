@@ -95,6 +95,9 @@ def extract_patches(X, patch_size):
 
 
 def plot_generated_batch(X_transformed, X_orig, generator_model, file_path):
+    batch_size = X_transformed.shape[0]
+    row_size = min(4, batch_size)
+
     # Generate images
     X_gen = generator_model.predict(X_orig)
 
@@ -108,8 +111,8 @@ def plot_generated_batch(X_transformed, X_orig, generator_model, file_path):
 
     X = np.concatenate((Xo, Xg, Xt), axis=0)
     list_rows = []
-    for i in range(int(X.shape[0] // 4)):
-        Xt = np.concatenate([X[k] for k in range(4 * i, 4 * (i + 1))], axis=2)
+    for i in range(int(X.shape[0] // row_size)):
+        Xt = np.concatenate([X[k] for k in range(row_size * i, row_size * (i + 1))], axis=2)
         list_rows.append(Xt)
 
     Xt = np.concatenate(list_rows, axis=1)
