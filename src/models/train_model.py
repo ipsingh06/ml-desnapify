@@ -23,7 +23,7 @@ import models
 @click.option('--batch_size', type=int, default=4,
               help='default=4')
 @click.option('--patch_size', type=(int, int), default=(64, 64),
-              help='default=64,64')
+              help='default=64 64')
 @click.option('--epochs', type=int, default=10,
               help='default=10')
 @click.option('--label_smoothing/--no_label_smoothing', default=False,

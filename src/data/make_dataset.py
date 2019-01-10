@@ -377,7 +377,7 @@ def create_hdf5(input_dir, output_path, max_count, shuffle):
 @click.argument('output_dir', type=click.Path())
 @click.option('--max_count', '-n', type=click.IntRange(1, math.inf))
 @click.option('--output_size', type=(int, int), default=(256, 256),
-              help='Size of images after scaling and cropping (default=256,256)')
+              help='Size of images after scaling and cropping (default=256 256)')
 @click.option('--preserve_dir/--no_preserve_dir', default=True,
               help='Preserve the original directory structure (default=True)')
 @click.option('--ignore_duplicates/--no_ignore_duplicates', default=True,
