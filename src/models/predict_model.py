@@ -75,12 +75,16 @@ def get_batch_from_hdf5(generator):
 @click.argument('input', type=click.Path(exists=True))
 @click.option('-t', '--truth', type=click.Path(exists=True),
               help='Path to ground truth image or directory of images')
-@click.option('-o', '--output', type=click.Path(), help='Output images to file')
-@click.option('--image_size', type=(int, int), default=(256, 256), help='Model input size')
+@click.option('-o', '--output', type=click.Path(),
+              help='Output images to file')
+@click.option('--image_size', type=(int, int), default=(256, 256),
+              help='Model input size (default=256 256)')
 @click.option('--concat/--no_concat', default=True,
-              help='Whether to concat input and ground truth to output images')
-@click.option('-b', '--batch_size', type=int, default=4)
-@click.option('--dataset', type=str, default='test', help='Dataset label to use for hdf5 (default=test)')
+              help='Whether to concat input and ground truth to output images (default=True)')
+@click.option('-b', '--batch_size', type=int, default=4,
+              help='default=4')
+@click.option('--dataset', type=str, default='test',
+              help='Dataset label to use for hdf5 (default=test)')
 def main(model,
          input,
          truth,
