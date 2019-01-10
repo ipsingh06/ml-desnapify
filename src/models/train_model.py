@@ -20,11 +20,16 @@ import models
 
 @click.command()
 @click.argument('dataset', type=click.Path(exists=True))
-@click.option('--batch_size', type=int, default=4)
-@click.option('--patch_size', type=(int, int), default=(64, 64))
-@click.option('--epochs', type=int, default=10)
-@click.option('--label_smoothing/--no_label_smoothing', default=False)
-@click.option('--label_flipping', type=click.FloatRange(0.0, 1.0), default=0.0)
+@click.option('--batch_size', type=int, default=4,
+              help='default=4')
+@click.option('--patch_size', type=(int, int), default=(64, 64),
+              help='default=64,64')
+@click.option('--epochs', type=int, default=10,
+              help='default=10')
+@click.option('--label_smoothing/--no_label_smoothing', default=False,
+              help='default=False')
+@click.option('--label_flipping', type=click.FloatRange(0.0, 1.0), default=0.0,
+              help='default=0.0')
 def main(dataset,
          batch_size,
          patch_size,
