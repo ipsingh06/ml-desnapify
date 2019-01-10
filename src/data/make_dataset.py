@@ -279,7 +279,8 @@ def check_hdf5(path):
 @click.argument('input_dir', type=click.Path(exists=True))
 @click.argument('output_path', type=click.Path())
 @click.option('--max_count', '-n', type=click.IntRange(1, math.inf))
-@click.option('--shuffle/--no_shuffle', default=True)
+@click.option('--shuffle/--no_shuffle', default=True,
+              'Whether to shuffle the images before splitting in train/valid/test (default=True)')
 def create_hdf5(input_dir, output_path, max_count, shuffle):
     logger = logging.getLogger(__name__)
     logger.info('Generating HDF5')
@@ -375,7 +376,8 @@ def create_hdf5(input_dir, output_path, max_count, shuffle):
 @click.argument('input_dir', type=click.Path(exists=True))
 @click.argument('output_dir', type=click.Path())
 @click.option('--max_count', '-n', type=click.IntRange(1, math.inf))
-@click.option('--output_size', type=(int, int), default=(256, 256))
+@click.option('--output_size', type=(int, int), default=(256, 256),
+              help='Size of images after scaling and cropping (default=256,256)')
 @click.option('--preserve_dir/--no_preserve_dir', default=True,
               help='Preserve the original directory structure (default=True)')
 @click.option('--ignore_duplicates/--no_ignore_duplicates', default=True,
