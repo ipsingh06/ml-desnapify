@@ -21,7 +21,7 @@ imagesize==1.1.0
 imutils==0.5.2
 Jinja2==2.10
 jmespath==0.9.3
-Keras==2.2.4
+Keras>=2.2.5
 Keras-Applications==1.0.6
 Keras-Preprocessing==1.0.5
 kiwisolver==1.0.1
