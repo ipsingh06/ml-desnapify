@@ -1,12 +1,12 @@
 # Desnapify
 
-Desnapify is a deep convolutional generative adversarial networks (DCGAN)
+Desnapify is a deep convolutional generative adversarial network (DCGAN)
 trained to remove Snapchat filters from selfie images.
 It is based on the excellent [pix2pix](https://phillipi.github.io/pix2pix) project by Isola et al.,
 and specifically the [Keras](https://github.com/tdeboissiere/DeepLearningImplementations/tree/master/pix2pix)
 implementation by [Thibault de Boissiere](https://github.com/tdeboissiere).
 
-The following figure shows a few examples of the output of the Desnapify on the doggy filter selfie.
+The following figure shows a few examples of the output of the Desnapify on doggy filter selfies.
 Top row is the input, middle row is the Desnapified output, bottom row is the target.
 
 ![Desnapification of the doggy filter](/docs/figures/sample_results.jpg?raw=true "Desnapification of the doggy filter")
@@ -58,7 +58,8 @@ We will be using the samples provided in `data/raw/samples/doggy`.
    python src/models/download_weights.py
    ```
 
-2. Run the prediction script. This will cycle through and display the resulting images.
+2. Run the prediction script.
+   This will cycle through and display the resulting output images alongside their inputs.
    ```bash
    python src/models/predict_model.py \
        models/doggy-512x512-v1/gen_weights_epoch030.h5 \
@@ -67,7 +68,7 @@ We will be using the samples provided in `data/raw/samples/doggy`.
    ```
 
    To store the results into images files, specify the `--output <path to directory>` option.
-   You can also specify `--no_concat` to output the output image only (and not the input).
+   You can also specify `--no_concat` to store the output image only.
    ```bash
    python src/models/predict_model.py \
        models/doggy-512x512-v1/gen_weights_epoch030.h5 \
@@ -76,6 +77,7 @@ We will be using the samples provided in `data/raw/samples/doggy`.
        --output out \
        --no_concat
    ```
+   Check the `out` directory for output images.
 
 ## <a name="train"></a> Training the model
 
@@ -111,7 +113,7 @@ about fitting your entire dataset into memory. Use as large a dataset as you lik
    The first contains images to be used as input to the model, and the second images to be used as the target.
 
 3. Run the data generation script again to split the dataset into training, validation and testing sets.
-   This also packages into a single HDF5 file.
+   This also packages all three datasets into a single HDF5 file.
    ```bash
    python src/data/make_dataset.py create-hdf5 \
        data/interim/dataset \
@@ -133,7 +135,11 @@ about fitting your entire dataset into memory. Use as large a dataset as you lik
        --epochs 30
    ```
 
-   We can visualize the performance metrics using Tensorboard:
+   We can see how well the model is learning and performing by looking at
+   `current_batch_training.png` and `current_batch_validation.png` images in
+   `reports/logs` directory.
+
+   We can also visualize the performance metrics using Tensorboard:
    ```bash
    tensorboard --logdir=reports/logs
    ```
