@@ -280,7 +280,7 @@ def check_hdf5(path):
 @click.argument('output_path', type=click.Path())
 @click.option('--max_count', '-n', type=click.IntRange(1, math.inf))
 @click.option('--shuffle/--no_shuffle', default=True,
-              'Whether to shuffle the images before splitting in train/valid/test (default=True)')
+              help='Whether to shuffle the images before splitting in train/valid/test (default=True)')
 def create_hdf5(input_dir, output_path, max_count, shuffle):
     logger = logging.getLogger(__name__)
     logger.info('Generating HDF5')
