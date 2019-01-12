@@ -124,6 +124,7 @@ def main(dataset,
                    show_layer_names=True)
 
         # Load discriminator model
+        # TODO: modify disc to accept real input as well
         discriminator_model = models.DCGAN_discriminator(img_dim_disc, nb_patch)
         discriminator_model.summary()
         plot_model(discriminator_model,
@@ -131,6 +132,7 @@ def main(dataset,
                    show_shapes=True,
                    show_layer_names=True)
 
+        # TODO: pretty sure this is unnecessary
         generator_model.compile(loss='mae', optimizer=opt_discriminator)
         discriminator_model.trainable = False
 
@@ -140,6 +142,7 @@ def main(dataset,
                                    patch_size,
                                    image_data_format)
 
+        # L1 loss applies to generated image, cross entropy applies to predicted label
         loss = [models.l1_loss, 'binary_crossentropy']
         loss_weights = [1E1, 1]
         DCGAN_model.compile(loss=loss, loss_weights=loss_weights, optimizer=opt_dcgan)
@@ -183,6 +186,7 @@ def main(dataset,
                 # Create a batch to feed the generator model
                 X_gen_target, X_gen = next(out_train_gen)
                 y_gen = np.zeros((X_gen.shape[0], 2), dtype=np.uint8)
+                # Set labels to 1 (real) to maximize the discriminator loss
                 y_gen[:, 1] = 1
 
                 # Freeze the discriminator
