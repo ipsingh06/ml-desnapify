@@ -47,7 +47,7 @@ python-dotenv==0.10.0
 pytz==2018.7
 PyYAML==3.13
 requests==2.21.0
-rsa==3.4.2
+rsa==4.1
 s3transfer==0.1.13
 scipy==1.2.0
 six==1.12.0
