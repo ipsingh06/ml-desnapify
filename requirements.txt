@@ -45,7 +45,7 @@ pyparsing==2.3.0
 python-dateutil==2.7.5
 python-dotenv==0.10.0
 pytz==2018.7
-PyYAML==3.13
+PyYAML==5.4
 requests==2.21.0
 rsa==3.4.2
 s3transfer==0.1.13
