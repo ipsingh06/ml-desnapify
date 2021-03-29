@@ -40,7 +40,7 @@ pyasn1==0.4.4
 pycodestyle==2.4.0
 pydot==1.4.1
 pyflakes==2.0.0
-Pygments==2.3.0
+Pygments==2.7.4
 pyparsing==2.3.0
 python-dateutil==2.7.5
 python-dotenv==0.10.0
