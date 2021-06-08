@@ -34,7 +34,7 @@ opencv-python==3.4.4.19
 packaging==18.0
 parmap==1.5.1
 pathlib2==2.3.3
-Pillow==5.3.0
+Pillow==8.2.0
 protobuf==3.6.1
 pyasn1==0.4.4
 pycodestyle==2.4.0
