@@ -30,7 +30,7 @@ MarkupSafe==1.1.0
 matplotlib==3.0.2
 mccabe==0.6.1
 numpy==1.15.4
-opencv-python==3.4.4.19
+opencv-python==3.4.7.28
 packaging==18.0
 parmap==1.5.1
 pathlib2==2.3.3
