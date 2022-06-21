@@ -29,7 +29,7 @@ Markdown==3.0.1
 MarkupSafe==1.1.0
 matplotlib==3.0.2
 mccabe==0.6.1
-numpy==1.15.4
+numpy==1.22.0
 opencv-python==3.4.4.19
 packaging==18.0
 parmap==1.5.1
