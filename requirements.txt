@@ -35,7 +35,7 @@ packaging==18.0
 parmap==1.5.1
 pathlib2==2.3.3
 Pillow==5.3.0
-protobuf==3.6.1
+protobuf==3.18.3
 pyasn1==0.4.4
 pycodestyle==2.4.0
 pydot==1.4.1
